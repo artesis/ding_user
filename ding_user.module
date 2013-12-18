@@ -67,7 +67,9 @@ function ding_user_menu_alter(&$items) {
 
   $items['user/%user/view']['title'] = t('User profile');
   $items['user/%user/edit']['title'] = t('Edit user profile');
-  $items['user/%pm_arg/status']['title'] = t('User status');
+  if (!empty($items['user/%pm_arg/status'])) {
+    $items['user/%pm_arg/status']['title'] = t('User status');
+  }
 }
 
 
@@ -140,7 +142,14 @@ function ding_user_form_alter(&$form, $form_state, $form_id) {
   switch ($form_id) {
     case 'user_login':
     case 'user_login_block':
+
+      $form['#attached']['js'][] = array(
+        'data' => drupal_get_path('module', 'ding_user') .  '/js/ding_user.js',
+        'type' => 'file',
+      );
+      $form['#attributes'] = array('class' => array('ding-user-login'));
       $form['name']['#type'] = 'password';
+
       // Add our own validation handler, after the default Drupal login
       // validator.
       $pos = array_search('user_login_authenticate_validate', $form['#validate']);
