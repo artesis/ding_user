@@ -65,10 +65,10 @@ function ding_user_menu_alter(&$items) {
     }
   }
 
-  $items['user/%user/view']['title'] = t('User profile');
-  $items['user/%user/edit']['title'] = t('Edit user profile');
+  $items['user/%user/view']['title'] = 'User profile';
+  $items['user/%user/edit']['title'] = 'Edit user profile';
   if (!empty($items['user/%pm_arg/status'])) {
-    $items['user/%pm_arg/status']['title'] = t('User status');
+    $items['user/%pm_arg/status']['title'] = 'User status';
   }
 }
 
