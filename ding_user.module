@@ -65,9 +65,11 @@ function ding_user_menu_alter(&$items) {
     }
   }
 
-  $items['user/%user/view']['title'] = t('User profile');
-  $items['user/%user/edit']['title'] = t('Edit user profile');
-  $items['user/%pm_arg/status']['title'] = t('User status');
+  $items['user/%user/view']['title'] = 'User profile';
+  $items['user/%user/edit']['title'] = 'Edit user profile';
+  if (!empty($items['user/%pm_arg/status'])) {
+    $items['user/%pm_arg/status']['title'] = 'User status';
+  }
 }
 
 
@@ -140,7 +142,14 @@ function ding_user_form_alter(&$form, $form_state, $form_id) {
   switch ($form_id) {
     case 'user_login':
     case 'user_login_block':
+
+      $form['#attached']['js'][] = array(
+        'data' => drupal_get_path('module', 'ding_user') .  '/js/ding_user.js',
+        'type' => 'file',
+      );
+      $form['#attributes'] = array('class' => array('ding-user-login'));
       $form['name']['#type'] = 'password';
+
       // Add our own validation handler, after the default Drupal login
       // validator.
       $pos = array_search('user_login_authenticate_validate', $form['#validate']);
@@ -756,14 +765,8 @@ function ding_user_authenticate_form_callback($form, &$form_state) {
     // Close dialog if successful.
     $response['#commands'][] = ajax_command_ding_popup_close('ding_user');
 
-    // Update the user login box.
-    if (module_exists('artesis_backend')) {
-      $refresh_commands = artesis_backend_refresh_login();
-
-      foreach ($refresh_commands as $command) {
-        $response['#commands'][] = $command;
-      }
-    }
+    // Allow other modules to modify the command set.
+    drupal_alter('artesis_ajax_commands', $response['#commands']);
   }
   else {
     // Else redisplay form and messages.
