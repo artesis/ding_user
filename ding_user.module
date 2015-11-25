@@ -717,7 +717,7 @@ function ajax_command_ding_user_authenticate($extra_data) {
     $form_id = 'ding_user_authenticate_form';
   }
   else {
-    $title = t('Login');
+    $title = t('Type your credentials');
     $form_id = 'user_login';
   }
 
