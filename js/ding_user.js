@@ -7,6 +7,9 @@ Drupal.behaviors.ding_user = {
       return;
     }
 
+    $('.form-item-name input').attr('placeholder', Drupal.t("Loan- or card-number"));
+    $('.form-item-pass input').attr('placeholder', Drupal.t("Pincode"));
+	
     $('.ding-user-login input', context).keyup(function(e) {
       // Handle "enter" key.
       if (e.which == 13) {
