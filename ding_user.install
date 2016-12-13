@@ -1,9 +1,14 @@
 <?php
+1/**
+ * @file
+ * Install new cache table to store user credentials.
+ */
+
 /**
  * Implements hook_install().
  */
 function ding_user_install() {
-  // Use DingUserCredentialsCache instead of default DrupalDatabaseCache
+  // Use DingUserCredentialsCache instead of default DrupalDatabaseCache.
   variable_set('cache_class_cache_ding_user_credentials', 'DingUserCredentialsCache');
 }
 
@@ -36,8 +41,7 @@ function ding_user_update_7001(&$sandbox) {
  */
 function ding_user_update_7002(&$sandbox) {
   $updated = db_update('system')
-    ->fields (array('weight' => -1))
+    ->fields(array('weight' => -1))
     ->condition('name', 'ding_user', '=')
     ->execute();
 }
-
