@@ -1,5 +1,5 @@
 <?php
-1/**
+/**
  * @file
  * Install new cache table to store user credentials.
  */
