@@ -1,4 +1,8 @@
 <?php
+/**
+ * @file
+ * Handles some tabs on the user profile page ?
+ */
 
 /**
  * Plugins are described by creating a $plugin array which will be used
@@ -15,7 +19,7 @@ $plugin = array(
 );
 
 /**
- * Render callback function
+ * Render callback function.
  */
 function ding_user_my_page_type_render($subtype, $conf, $panel_args, $context) {
   $block = array();
@@ -28,7 +32,7 @@ function ding_user_my_page_type_render($subtype, $conf, $panel_args, $context) {
 }
 
 /**
- * Plugin settings form
+ * Plugin settings form.
  */
 function ding_user_my_page_content_type_edit_form($form, &$form_state) {
   return $form;
