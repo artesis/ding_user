@@ -143,14 +143,13 @@ function ding_user_form_alter(&$form, $form_state, $form_id) {
   switch ($form_id) {
     case 'user_login':
     case 'user_login_block':
-      // Change input type on name field to password as the user may enter CPR.
-      $form['name']['#type'] = 'password';
 
-      // Make the name and password not required to by-pass error handling in
-      // default validation function. To prevent the "request new password"
-      // message.
-      $form['name']['#required'] = FALSE;
-      $form['pass']['#required'] = FALSE;
+      $form['#attached']['js'][] = array(
+        'data' => drupal_get_path('module', 'ding_user') . '/js/ding_user.js',
+        'type' => 'file',
+      );
+      $form['#attributes'] = array('class' => array('ding-user-login'));
+      $form['name']['#type'] = 'password';
 
       // Add our own validation handler, after the default Drupal login
       // validator.
@@ -164,8 +163,7 @@ function ding_user_form_alter(&$form, $form_state, $form_id) {
         $pos += 1;
       }
       array_splice($form['#validate'], $pos, 0, 'ding_user_user_login_validate');
-    // Falling through on purpose (if not reservation and login via ajax will
-    // fail.).
+      break;
 
     // Falling through on purpose.
     case 'ding_user_authenticate_form':
@@ -455,13 +453,13 @@ function ding_user_ding_provider_user() {
 }
 
 /**
- * Return the url to redirect user to in order to authenticate/log in.
+ * Return the page to redirect user to in order to authenticate/log in.
  *
  * Used by ding_provider.
  */
 function ding_user_auth_page() {
   global $user;
-  if (user_is_logged_in()) {
+  if ($user->uid > 0) {
     return 'user/' . $user->uid . '/authenticate';
   }
   return 'user/login';
@@ -480,10 +478,10 @@ function ding_user_default_authname($name) {
   // it.
   require_once DRUPAL_ROOT . '/' . variable_get('password_inc', 'includes/password.inc');
 
-  // A sha512 is 64 bytes, which becomes 128 hexadecimal chars, which is
-  // exactly the size of the authname field in the database. So we ask hash
-  // for binary data and lets _password_base64_encode base64 encode it to 86
-  // characters, leaving enough room for our suffix.
+  /* A sha512 is 64 bytes, which becomes 128 hexadecimal chars, which is
+  exactly the size of the authname field in the database. So we ask hash
+  for binary data and lets _password_base64_encode base64 encode it to 86
+  characters, leaving enough room for our suffix. */
   $hash = hash('sha512', drupal_get_private_key() . $name, TRUE);
 
   return _password_base64_encode($hash, drupal_strlen($hash)) . '@ding_user';
@@ -498,12 +496,10 @@ function ding_user_default_authname($name) {
 function ding_user_user_login_validate($form, &$form_state) {
   // If $form_state['uid'] is set and has a true value, Drupal already found a
   // user, so we don't bother. Also, we require name and pass.
-  if (isset($form_state['uid']) && $form_state['uid']) {
-    // Normal Drupal user have been logged in.
+  if (isset($form_state['uid']) && $form_state['uid'] || empty($form_state['values']['name']) || empty($form_state['values']['pass'])) {
     return;
   }
   try {
-    // Trying to login the user using the provider.
     $auth_res = ding_provider_invoke('user', 'authenticate', $form_state['values']['name'], $form_state['values']['pass']);
     if (!is_array($auth_res) || !isset($auth_res['success'])) {
       watchdog('ding_user', 'Provider returned invalid result: @res', array('@res' => print_r($auth_res, TRUE)), WATCHDOG_DEBUG);
@@ -520,7 +516,6 @@ function ding_user_user_login_validate($form, &$form_state) {
         $auth_name = ding_user_default_authname($form_state['values']['name']);
       }
 
-      // Create new account in Drupal and if one exists update it.
       $account = _ding_user_create_account($auth_name, $auth_res);
 
       // Save credentials for later. Do it early as the provider might expect
@@ -549,40 +544,22 @@ function ding_user_user_login_validate($form, &$form_state) {
       }
     }
     else {
-      // Check if any messages was returned from the provider.
       if (isset($auth_res['messages'])) {
         foreach ($auth_res['messages'] as $message) {
-          $type = 'warning';
           if (is_array($message)) {
             list($message, $type) = $message;
+          }
+          else {
+            $type = 'warning';
           }
           drupal_set_message(check_plain($message), $type);
         }
       }
-
-      // Check if name and pass where filled out. These fields are not required
-      // in the form to prevent the default form validation from displaying the
-      // reset password link, which would not make sens for provider users.
-      foreach (array('name', 'pass') as $field) {
-        if (empty($form_state['values'][$field])) {
-          form_set_error($field, t('!name field is required.', array('!name' => $form[$field]['#title'])));
-        }
-      }
-
-      // If we reach this code the login have failed and we always want to
-      // display this message.
-      form_set_error('name', t('Sorry, unrecognized username or password. Please contact your local library to request a new password. Contact information can be found on the <a href="@url">library</a> page.', array('@url' => url('biblioteker'))));
-      // Obfuscate the user name. We just set the form value to the obfuscated
-      // version as user.module will log the failure with the name from the
-      // form. If the provider defines its own authnames, this wont match the
-      // username that the user would have, but we can't expect the provider
-      // to supply it for invalid logins.
-      form_set_value($form['name'], ding_user_default_authname($form_state['values']['name']), $form_state);
     }
   }
-  catch (DingProviderException $exception) {
+  catch (Exception $e) {
     // Exception thrown, log error and carry on.
-    watchdog_exception('ding_user', $exception);
+    watchdog('ding_user', 'Provider exception, message: @message', array('@message' => $e->getMessage()), WATCHDOG_ERROR);
   }
 }
 
@@ -803,9 +780,13 @@ function ding_user_profile_update_submit(&$form, &$form_state) {
 function _ding_user_create_profile2($account) {
   $profile = ding_user_provider_profile($account);
   if (!$profile) {
-    // Load profile2 type.
-    $profile_type = ding_user_get_provider_profile_type();
-
+    $provider = _ding_provider_get_provider('user');
+    $provider_profile_type = 'provider_' . $provider['module'];
+    // Check that we have a profile type for this provider.
+    if (!$profile_type = profile2_type_load($provider_profile_type)) {
+      // Create new type, if provider haven't.
+      $profile_type = ding_user_create_profile_type($provider);
+    }
     // Create a profile for current user.
     $profile = new Profile(array(
       'user' => $account,
@@ -863,8 +844,8 @@ function ajax_command_ding_user_authenticate($extra_data) {
   if (variable_get('https', FALSE)) {
     $form = drupal_get_form('user_login');
     $url = parse_url($_SERVER['HTTP_REFERER']);
-    $path_start = strpos($_SERVER['HTTP_REFERER'], '/', drupal_strlen($url['scheme']) + 3);
-    $referer = drupal_substr($_SERVER['HTTP_REFERER'], $path_start + 1);
+    $path_start = strpos($_SERVER['HTTP_REFERER'], '/', strlen($url['scheme']) + 3);
+    $referer = substr($_SERVER['HTTP_REFERER'], $path_start + 1);
     // Filter out any language prefixes as it will be automatically added to the
     // URL again.
     if (!empty($language->language) && preg_match('/' . $language->prefix . '/', $referer) > 0) {
@@ -906,7 +887,7 @@ function ding_user_authenticate_form_callback($form, &$form_state) {
     $response['#commands'][] = ajax_command_ding_popup_close('ding_user');
 
     // Allow other modules to modify the command set.
-    //drupal_alter('artesis_ajax_commands', $response['#commands']);
+    drupal_alter('artesis_ajax_commands', $response['#commands']);
   }
   else {
     // Else redisplay form and messages.
@@ -978,7 +959,7 @@ function ding_user_save_creds($auth_res) {
  * Check if the given account is a user authenticated through a provider.
  */
 function ding_user_is_provider_user($account) {
-  $names = &drupal_static(__FUNCTION__);
+  static $names;
   if (!isset($names)) {
     $names = db_select('authmap')
       ->fields('authmap', array('authname'))
