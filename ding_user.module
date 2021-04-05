@@ -528,6 +528,9 @@ function ding_user_user_login_validate($form, &$form_state) {
       // profile, or themselves in the profile_init callback.
       ding_user_save_creds($auth_res);
 
+      // Attempt to upgrade an existing anonymous consent storage to this user.
+      _ding_user_upgrade_anonymous_ecc_consent($account);
+
       $profile = _ding_user_create_profile2($account);
 
       // Set additional tabs in profile2.
@@ -599,6 +602,36 @@ function ding_user_user_login_validate($form, &$form_state) {
     else {
       // Exception thrown, log error and carry on.
       watchdog_exception('ding_user', $exception);
+    }
+  }
+}
+
+/**
+ * Attempt to upgrade any anonymous consent from this device.
+ */
+function _ding_user_upgrade_anonymous_ecc_consent($account) {
+  $cookie_name = eu_cookie_compliance_get_settings()['cookie_name'] . '-cid';
+  if (isset($_COOKIE[$cookie_name])) {
+    $cid = $_COOKIE[$cookie_name];
+
+    // Upgrade the consent. Use try-catch as we do not in any case wanna cause
+    // issues during provider login process.
+    try {
+      db_update('eu_cookie_compliance_basic_consent')
+        ->fields(['uid' => $account->uid])
+        ->condition('cid', $cid)
+        ->execute();
+
+      watchdog('ding_user', 'Attempted consent storage upgrade for cid: %cid to provider user uid: %uid', [
+        '%cid' => $cid,
+        '%uid' => $account->uid,
+      ]);
+
+      // Remove our cid-cookie again.
+      setcookie($cookie_name, "", 1, '/');
+    }
+    catch (Exception $e) {
+      watchdog_exception('ding_user', $e);
     }
   }
 }
